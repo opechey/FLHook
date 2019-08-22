@@ -931,6 +931,8 @@ USERCMD UserCmds[] =
 	{ L"/drc",		GiveCash::UserCmd_DrawCash,		L"Usage: /drawcash <charname> <code> <cash> or /drc ..." },
 	{ L"/shc",		GiveCash::UserCmd_ShowCash,		L"Usage: /showcash <charname> <code> or /shc ..." },
 	{ L"/drawcash",		GiveCash::UserCmd_DrawCash,		L"Usage: /drawcash <charname> <code> <cash> or /drc ..." },
+	{ L"/me",			Message::UserCmd_Me, L"Usage: /me <message>" },
+	{ L"/do",			Message::UserCmd_Do, L"Usage: /do <message>" },
 	{ L"/group",		Message::UserCmd_GroupMsg, L"Usage: /group <message> or /g ..." },
 	{ L"/g",			Message::UserCmd_GroupMsg, L"Usage: /group <message> or /g ..." },
 	{ L"/local",		Message::UserCmd_LocalMsg, L"Usage: /local <message> or /l ...>" },
