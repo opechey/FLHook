@@ -183,6 +183,7 @@ namespace CargoDrop
 namespace Restart
 {
 	void LoadSettings(const string &scPluginCfgFile);
+	void LoadShipPrices();
 	bool UserCmd_ShowRestarts(uint iClientID, const wstring &wscCmd, const wstring &wscParam, const wchar_t *usage);
 	bool UserCmd_Restart(uint iClientID, const wstring &wscCmd, const wstring &wscParam, const wchar_t *usage);
 	void Timer();
