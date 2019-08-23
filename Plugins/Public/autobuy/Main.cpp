@@ -1,4 +1,11 @@
 // Autobuy for FLHookPlugin
+// December 2015 by BestDiscoveryHookDevs2015
+//
+// This is based on the original autobuy available in FLHook. However this one was hardly extensible and lacking features.
+//
+// This is free software; you can redistribute it and/or modify it as
+// you wish without restriction. If you do then I would appreciate
+// being notified and/or mentioned somewhere.
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //Includes
@@ -24,48 +31,229 @@
 #define ADDR_COMMON_VFTABLE_CM 0x139C90
 #define ADDR_COMMON_VFTABLE_GUN 0x139C38
 
-#define PRINT_ERROR() { for(uint i = 0; (i < sizeof(wscError)/sizeof(wstring)); i++) PrintUserCmdText(iClientID, L"%s", wscError[i].c_str()); return; }
-#define PRINT_OK() PrintUserCmdText(iClientID, L"OK");
-#define PRINT_DISABLED() PrintUserCmdText(iClientID, L"Command disabled");
-#define GET_USERFILE(a) string a; { CAccount *acc = Players.FindAccountFromClientID(iClientID); wstring wscDir; HkGetAccountDirName(acc, wscDir); a = scAcctPath + wstos(wscDir) + "\\flhookuser.ini"; }
-
-wstring wscError[] =
-{
-	L"Error: Invalid parameters",
-	L"Usage: /autobuy <param> [<on/off>]",
-	L"<Param>:",
-	L"   info - display current autobuy-settings",
-	L"   missiles - enable/disable autobuy for missiles",
-	L"   torps - enable/disable autobuy for torpedos",
-	L"   mines - enable/disable autobuy for mines",
-	L"   cd - enable/disable autobuy for cruise disruptors",
-	L"   cm - enable/disable autobuy for countermeasures",
-	L"   reload - enable/disable autobuy for nanobots/shield batteries",
-	L"   all: enable/disable autobuy for all of the above",
-	L"Examples:",
-	L"\"/autobuy missiles on\" enable autobuy for missiles",
-	L"\"/autobuy all off\" completely disable autobuy",
-	L"\"/autobuy info\" show autobuy info",
-};
+static int set_iPluginDebug = 0;
 
 /// A return code to indicate to FLHook if we want the hook processing to continue.
 PLUGIN_RETURNCODE returncode;
 
-struct AUTOBUYINFO {
+void LoadSettings();
+
+BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved)
+{
+	srand((uint)time(0));
+	// If we're being loaded from the command line while FLHook is running then
+	// set_scCfgFile will not be empty so load the settings as FLHook only
+	// calls load settings on FLHook startup and .rehash.
+	if(fdwReason == DLL_PROCESS_ATTACH)
+	{
+		if (set_scCfgFile.length()>0)
+			LoadSettings();
+	}
+	else if (fdwReason == DLL_PROCESS_DETACH)
+	{
+	}
+	return true;
+}
+
+/// Hook will call this function after calling a plugin function to see if we the
+/// processing to continue
+EXPORT PLUGIN_RETURNCODE Get_PluginReturnCode()
+{
+	return returncode;
+}
+
+// For ships, we go the easy way and map each ship belonging to each base
+static map <uint, int> mapAmmolimits;
+
+// Autobuy data for players
+struct AUTOBUY_PLAYERINFO
+{
 	bool bAutoBuyMissiles;
 	bool bAutoBuyMines;
 	bool bAutoBuyTorps;
 	bool bAutoBuyCD;
 	bool bAutoBuyCM;
-	bool bAutoBuyReload;
+	bool bAutobuyBB;
+	bool bAutobuyCloak;
+	bool bAutobuyMunition;
+	bool bAutoRepair;
 };
 
-AUTOBUYINFO AutoBuyInfo[MAX_CLIENT_ID + 1];
+static map <uint, AUTOBUY_PLAYERINFO> mapAutobuyPlayerInfo;
+static map <uint, uint> mapAutobuyFLHookExtras;
+
+static map <uint, int> mapStackableItems;
+
+uint iNanobotsID;
+uint iShieldBatsID;
+
+bool bPluginEnabled = true;
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//Loading Settings
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+void LoadSettings()
+{
+	returncode = DEFAULT_RETURNCODE;
+
+	//Load ammo limit data from FL
+	string File_Misc = "..\\data\\equipment\\misc_equip.ini";
+	string File_Weapon = "..\\data\\equipment\\weapon_equip.ini";
+	string File_FLHook = "..\\exe\\flhook_plugins\\autobuy.cfg";
+	int iLoaded = 0;
+	int iLoaded2 = 0;
+	int iLoadedStackables = 0;
+
+	INI_Reader ini;
+	if (ini.open(File_Misc.c_str(), false))
+	{
+		while (ini.read_header())
+			{
+				if (ini.is_header("CounterMeasure"))
+				{
+					uint itemname;
+					int itemlimit;
+					bool valid = false;
+
+					while (ini.read_value())
+					{
+						if (ini.is_value("nickname"))
+						{
+							itemname = CreateID(ini.get_value_string(0));
+						}
+						else if (ini.is_value("ammo_limit"))
+						{
+							valid = true;
+							itemlimit = ini.get_value_int(0);
+						}
+					}	
+
+					if (valid == true)
+					{
+						mapAmmolimits[itemname] = itemlimit;
+						++iLoaded;
+					}
+				}
+			}
+		ini.close();
+	}
+	if (ini.open(File_Weapon.c_str(), false))
+	{
+		while (ini.read_header())
+		{
+			
+			if (ini.is_header("Munition"))
+			{
+				uint itemname;
+				int itemlimit;
+				bool valid = false;
+
+				while (ini.read_value())
+				{
+					if (ini.is_value("nickname"))
+					{
+						itemname = CreateID(ini.get_value_string(0));
+					}
+					else if (ini.is_value("ammo_limit"))
+					{
+						valid = true;
+						itemlimit = ini.get_value_int(0);
+					}
+				}
+
+				if (valid == true)
+				{
+					mapAmmolimits[itemname] = itemlimit;
+					++iLoaded;
+				}
+			}
+			else if (ini.is_header("Mine"))
+			{
+				uint itemname;
+				int itemlimit;
+				bool valid = false;
+
+				while (ini.read_value())
+				{
+					if (ini.is_value("nickname"))
+					{
+						itemname = CreateID(ini.get_value_string(0));
+					}
+					else if (ini.is_value("ammo_limit"))
+					{
+						valid = true;
+						itemlimit = ini.get_value_int(0);
+					}
+				}
+
+				if (valid == true)
+				{
+					mapAmmolimits[itemname] = itemlimit;
+					++iLoaded;
+				}
+			}
+		}
+		ini.close();
+	}
+
+	if (ini.open(File_FLHook.c_str(), false))
+	{
+		while (ini.read_header())
+			{
+				if (ini.is_header("config"))
+				{
+					while (ini.read_value())
+					{
+						if (ini.is_value("enabled"))
+						{
+							bPluginEnabled = ini.get_value_bool(0);
+						}
+					}				
+				}
+				else if (ini.is_header("extra"))
+				{
+					while (ini.read_value())
+					{
+						if (ini.is_value("item"))
+						{
+							mapAutobuyFLHookExtras[CreateID(ini.get_value_string(0))] = CreateID(ini.get_value_string(1));
+							++iLoaded2;
+						}
+					}
+				}
+				else if (ini.is_header("stackable"))
+				{
+					while (ini.read_value())
+					{
+						if (ini.is_value("weapon"))
+						{
+							mapStackableItems[CreateID(ini.get_value_string(0))] = ini.get_value_int(1);
+							++iLoadedStackables;
+						}
+					}
+				}
+			}
+		ini.close();
+	}
+
+
+	ConPrint(L"AUTOBUY: Loaded %u ammo limit entries\n", iLoaded);
+	ConPrint(L"AUTOBUY: Loaded %u FLHook extra items\n", iLoaded2);
+	ConPrint(L"AUTOBUY: Loaded %u stackable launchers\n", iLoadedStackables);
+
+	pub::GetGoodID(iNanobotsID, "ge_s_repair_01");
+	pub::GetGoodID(iShieldBatsID, "ge_s_battery_01");
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//Functions
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 struct AUTOBUY_CARTITEM
 {
 	uint iArchID;
-	uint iCount;
+	int iCount;
 	wstring wscDescription;
 };
 
@@ -81,82 +269,282 @@ int HkPlayerAutoBuyGetCount(list<CARGO_INFO> &lstCargo, uint iItemArchID)
 }
 
 #define ADD_EQUIP_TO_CART(desc)	{ aci.iArchID = ((Archetype::Launcher*)eq)->iProjectileArchID; \
-								aci.iCount = MAX_PLAYER_AMMO - HkPlayerAutoBuyGetCount(lstCargo, aci.iArchID); \
+								aci.iCount = mapAmmolimits[aci.iArchID] - HkPlayerAutoBuyGetCount(lstCargo, aci.iArchID); \
 								aci.wscDescription = desc; \
 								lstCart.push_back(aci); }
 
-void UserCmd_AutoBuy(uint iClientID, const wstring &wscParam)
+#define ADD_EQUIP_TO_CART_STACKABLE(desc)	{ aci.iArchID = ((Archetype::Launcher*)eq)->iProjectileArchID; \
+								aci.iCount = (mapAmmolimits[aci.iArchID] * tempmap[eq->iArchID])  - HkPlayerAutoBuyGetCount(lstCargo, aci.iArchID); \
+								aci.wscDescription = desc; \
+								lstCart.push_back(aci); }
+
+#define ADD_EQUIP_TO_CART_FLHOOK(desc)	{ aci.iArchID = mapAutobuyFLHookExtras[eq->iArchID]; \
+								aci.iCount = mapAmmolimits[aci.iArchID] - HkPlayerAutoBuyGetCount(lstCargo, aci.iArchID); \
+								aci.wscDescription = desc; \
+								lstCart.push_back(aci); }
+
+void AutobuyInfo(uint iClientID)
 {
+	PrintUserCmdText(iClientID, L"Error: Invalid parameters");
+	PrintUserCmdText(iClientID, L"Usage: /autobuy <param> [<on/off>]");
+	PrintUserCmdText(iClientID, L"<Param>:");
+	PrintUserCmdText(iClientID, L"   info - display current autobuy-settings");
+	PrintUserCmdText(iClientID, L"   missiles - enable/disable autobuy for missiles");
+	PrintUserCmdText(iClientID, L"   torps - enable/disable autobuy for torpedos");
+	PrintUserCmdText(iClientID, L"   mines - enable/disable autobuy for mines");
+	PrintUserCmdText(iClientID, L"   cd - enable/disable autobuy for cruise disruptors");
+	PrintUserCmdText(iClientID, L"   cm - enable/disable autobuy for countermeasures");
+	PrintUserCmdText(iClientID, L"   reload - enable/disable autobuy for nanobots/shield batteries");
+	PrintUserCmdText(iClientID, L"   repair - enable/disable auto-repair");
+	PrintUserCmdText(iClientID, L"   all: enable/disable autobuy for all of the above");
+	PrintUserCmdText(iClientID, L"Examples:");
+	PrintUserCmdText(iClientID, L"\"/autobuy missiles on\" enable autobuy for missiles");
+	PrintUserCmdText(iClientID, L"\"/autobuy all off\" completely disable autobuy");
+	PrintUserCmdText(iClientID, L"\"/autobuy info\" show autobuy info");
+}
+
+bool  UserCmd_AutoBuy(uint iClientID, const wstring &wscCmd, const wstring &wscParam, const wchar_t *usage)
+{
+	if (!bPluginEnabled)
+	{
+		PrintUserCmdText(iClientID, L"Autobuy is disabled.");
+		return true;
+	}
+
 	wstring wscType = ToLower(GetParam(wscParam, ' ', 0));
 	wstring wscSwitch = ToLower(GetParam(wscParam, ' ', 1));
 
 	if (!wscType.compare(L"info"))
 	{
-		PrintUserCmdText(iClientID, L"Missiles: %s", AutoBuyInfo[iClientID].bAutoBuyMissiles ? L"On" : L"Off");
-		PrintUserCmdText(iClientID, L"Mine: %s", AutoBuyInfo[iClientID].bAutoBuyMines ? L"On" : L"Off");
-		PrintUserCmdText(iClientID, L"Torpedos: %s", AutoBuyInfo[iClientID].bAutoBuyTorps ? L"On" : L"Off");
-		PrintUserCmdText(iClientID, L"Cruise Disruptors: %s", AutoBuyInfo[iClientID].bAutoBuyCD ? L"On" : L"Off");
-		PrintUserCmdText(iClientID, L"Countermeasures: %s", AutoBuyInfo[iClientID].bAutoBuyCM ? L"On" : L"Off");
-		PrintUserCmdText(iClientID, L"Nanobots/Shield Batteries: %s", AutoBuyInfo[iClientID].bAutoBuyReload ? L"On" : L"Off");
-		return;
+		PrintUserCmdText(iClientID, L"Missiles: %s", mapAutobuyPlayerInfo[iClientID].bAutoBuyMissiles ? L"On" : L"Off");
+		PrintUserCmdText(iClientID, L"Mine: %s", mapAutobuyPlayerInfo[iClientID].bAutoBuyMines ? L"On" : L"Off");
+		PrintUserCmdText(iClientID, L"Torpedos: %s", mapAutobuyPlayerInfo[iClientID].bAutoBuyTorps ? L"On" : L"Off");
+		PrintUserCmdText(iClientID, L"Cruise Disruptors: %s", mapAutobuyPlayerInfo[iClientID].bAutoBuyCD ? L"On" : L"Off");
+		PrintUserCmdText(iClientID, L"Countermeasures: %s", mapAutobuyPlayerInfo[iClientID].bAutoBuyCM ? L"On" : L"Off");
+		PrintUserCmdText(iClientID, L"Munitions: %s", mapAutobuyPlayerInfo[iClientID].bAutobuyMunition ? L"On" : L"Off");
+		PrintUserCmdText(iClientID, L"Cloak Batteries: %s", mapAutobuyPlayerInfo[iClientID].bAutobuyCloak ? L"On" : L"Off");
+		PrintUserCmdText(iClientID, L"Nanobots/Shield Batteries: %s", mapAutobuyPlayerInfo[iClientID].bAutobuyBB ? L"On" : L"Off");
+		PrintUserCmdText(iClientID, L"Repair: %s", mapAutobuyPlayerInfo[iClientID].bAutoRepair ? L"On" : L"Off");
+		return true;
 	}
 
 	if (!wscType.length() || !wscSwitch.length() || ((wscSwitch.compare(L"on") != 0) && (wscSwitch.compare(L"off") != 0)))
-		PRINT_ERROR();
-
-	GET_USERFILE(scUserFile);
-
-	wstring wscFilename;
-	HkGetCharFileName(ARG_CLIENTID(iClientID), wscFilename);
-	string scSection = "autobuy_" + wstos(wscFilename);
+	{
+		AutobuyInfo(iClientID);
+		return true;
+	}
+		
 
 	bool bEnable = !wscSwitch.compare(L"on") ? true : false;
 	if (!wscType.compare(L"all")) {
-		AutoBuyInfo[iClientID].bAutoBuyMissiles = bEnable;
-		AutoBuyInfo[iClientID].bAutoBuyMines = bEnable;
-		AutoBuyInfo[iClientID].bAutoBuyTorps = bEnable;
-		AutoBuyInfo[iClientID].bAutoBuyCD = bEnable;
-		AutoBuyInfo[iClientID].bAutoBuyCM = bEnable;
-		AutoBuyInfo[iClientID].bAutoBuyReload = bEnable;
-		IniWrite(scUserFile, scSection, "missiles", bEnable ? "yes" : "no");
-		IniWrite(scUserFile, scSection, "mines", bEnable ? "yes" : "no");
-		IniWrite(scUserFile, scSection, "torps", bEnable ? "yes" : "no");
-		IniWrite(scUserFile, scSection, "cd", bEnable ? "yes" : "no");
-		IniWrite(scUserFile, scSection, "cm", bEnable ? "yes" : "no");
-		IniWrite(scUserFile, scSection, "reload", bEnable ? "yes" : "no");
+
+		mapAutobuyPlayerInfo[iClientID].bAutobuyBB = bEnable;
+		mapAutobuyPlayerInfo[iClientID].bAutoBuyCD = bEnable;
+		mapAutobuyPlayerInfo[iClientID].bAutobuyCloak = bEnable;
+		mapAutobuyPlayerInfo[iClientID].bAutoBuyCM = bEnable;
+		mapAutobuyPlayerInfo[iClientID].bAutoBuyMines = bEnable;
+		mapAutobuyPlayerInfo[iClientID].bAutoBuyMissiles = bEnable;	
+		mapAutobuyPlayerInfo[iClientID].bAutobuyMunition = bEnable;
+		mapAutobuyPlayerInfo[iClientID].bAutoBuyTorps = bEnable;
+		mapAutobuyPlayerInfo[iClientID].bAutoRepair = bEnable;
+		
+		HookExt::IniSetB(iClientID, "autobuy.bb", bEnable ? true : false);
+		HookExt::IniSetB(iClientID, "autobuy.cd", bEnable ? true : false);
+		HookExt::IniSetB(iClientID, "autobuy.cloak", bEnable ? true : false);
+		HookExt::IniSetB(iClientID, "autobuy.cm", bEnable ? true : false);
+		HookExt::IniSetB(iClientID, "autobuy.mines", bEnable ? true : false);
+		HookExt::IniSetB(iClientID, "autobuy.missiles", bEnable ? true : false);
+		HookExt::IniSetB(iClientID, "autobuy.munition", bEnable ? true : false);
+		HookExt::IniSetB(iClientID, "autobuy.torps", bEnable ? true : false);
+		HookExt::IniSetB(iClientID, "autobuy.repair", bEnable ? true : false);
 	}
 	else if (!wscType.compare(L"missiles")) {
-		AutoBuyInfo[iClientID].bAutoBuyMissiles = bEnable;
-		IniWrite(scUserFile, scSection, "missiles", bEnable ? "yes" : "no");
+		mapAutobuyPlayerInfo[iClientID].bAutoBuyMissiles = bEnable;
+		HookExt::IniSetB(iClientID, "autobuy.missiles", bEnable);
 	}
 	else if (!wscType.compare(L"mines")) {
-		AutoBuyInfo[iClientID].bAutoBuyMines = bEnable;
-		IniWrite(scUserFile, scSection, "mines", bEnable ? "yes" : "no");
+		mapAutobuyPlayerInfo[iClientID].bAutoBuyMines = bEnable;
+		HookExt::IniSetB(iClientID, "autobuy.mines", bEnable);
 	}
 	else if (!wscType.compare(L"torps")) {
-		AutoBuyInfo[iClientID].bAutoBuyTorps = bEnable;
-		IniWrite(scUserFile, scSection, "torps", bEnable ? "yes" : "no");
+		mapAutobuyPlayerInfo[iClientID].bAutoBuyTorps = bEnable;
+		HookExt::IniSetB(iClientID, "autobuy.torps", bEnable);
 	}
 	else if (!wscType.compare(L"cd")) {
-		AutoBuyInfo[iClientID].bAutoBuyCD = bEnable;
-		IniWrite(scUserFile, scSection, "cd", bEnable ? "yes" : "no");
+		mapAutobuyPlayerInfo[iClientID].bAutoBuyCD = bEnable;
+		HookExt::IniSetB(iClientID, "autobuy.cd", bEnable);
 	}
 	else if (!wscType.compare(L"cm")) {
-		AutoBuyInfo[iClientID].bAutoBuyCM = bEnable;
-		IniWrite(scUserFile, scSection, "cm", bEnable ? "yes" : "no");
+		mapAutobuyPlayerInfo[iClientID].bAutoBuyCM = bEnable;
+		HookExt::IniSetB(iClientID, "autobuy.cm", bEnable);
 	}
-	else if (!wscType.compare(L"reload")) {
-		AutoBuyInfo[iClientID].bAutoBuyReload = bEnable;
-		IniWrite(scUserFile, scSection, "reload", bEnable ? "yes" : "no");
+	else if (!wscType.compare(L"bb")) {
+		mapAutobuyPlayerInfo[iClientID].bAutobuyBB = bEnable;
+		HookExt::IniSetB(iClientID, "autobuy.bb", bEnable);
+	}
+	else if (!wscType.compare(L"munition")) {
+		mapAutobuyPlayerInfo[iClientID].bAutobuyMunition = bEnable;
+		HookExt::IniSetB(iClientID, "autobuy.munition", bEnable);
+	}
+	else if (!wscType.compare(L"cloak")) {
+		mapAutobuyPlayerInfo[iClientID].bAutobuyCloak = bEnable;
+		HookExt::IniSetB(iClientID, "autobuy.cloak", bEnable);
+	}
+	else if (!wscType.compare(L"repair")) {
+		mapAutobuyPlayerInfo[iClientID].bAutoRepair = bEnable;
+		HookExt::IniSetB(iClientID, "autobuy.repair", bEnable);
 	}
 	else
-		PRINT_ERROR();
+		AutobuyInfo(iClientID);
 
-	PRINT_OK();
+	PrintUserCmdText(iClientID, L"OK");
+	return true;
 }
 
-void HkPlayerAutoBuy(uint iClientID, uint iBaseID)
+void CheckforStackables(uint iClientID)
 {
+	map<uint, uint> tempmap;
+
+	// player cargo
+	int iRemHoldSize;
+	list<CARGO_INFO> lstCargo;
+	HkEnumCargo(ARG_CLIENTID(iClientID), lstCargo, iRemHoldSize);
+
+	foreach(lstCargo, CARGO_INFO, it)
+	{
+		if (!(*it).bMounted)
+			continue;
+
+		if (mapStackableItems.find(it->iArchID) != mapStackableItems.end())
+		{
+			tempmap[it->iArchID] += 1;
+		}
+	}
+
+	//now that we have identified the stackables, retrieve the current ammo count for stackables
+	for (map<uint, uint>::iterator ita = tempmap.begin(); ita != tempmap.end(); ita++)
+	{
+		Archetype::Equipment *eq = Archetype::GetEquipment(ita->first);
+		uint ammo = ((Archetype::Launcher*)eq)->iProjectileArchID;
+
+		for (list<EquipDesc>::iterator item = Players[iClientID].equipDescList.equip.begin(); item != Players[iClientID].equipDescList.equip.end(); item++)
+		{
+			if (item->iArchID == ammo)
+			{
+				if (item->iCount > (mapAmmolimits[ammo] * tempmap[ita->first]))
+				{
+					wstring wscCharname = (const wchar_t*)Players.GetActiveCharacterName(iClientID);
+					//ConPrint(L"DEBUG: player %s, iCount %d, ammo %d, tempmap %d \n", wscCharname.c_str(), item->iCount, mapAmmolimits[ammo], tempmap[ita->first]);
+					PrintUserCmdText(iClientID, L"You have lost some ammo because you had more than you should have.");
+
+					pub::Player::RemoveCargo(iClientID, item->sID, (item->iCount - (mapAmmolimits[ammo] * tempmap[ita->first])) );
+				}
+			}
+		}
+	}
+
+	
+
+	foreach(lstCargo, CARGO_INFO, it)
+	{
+		if (!(*it).bMounted)
+			continue;
+
+		if (mapStackableItems.find(it->iArchID) != mapStackableItems.end())
+		{
+			tempmap[it->iArchID] += 1;
+		}
+	}
+
+
+}
+
+void PlayerAutorepair(uint iClientID)
+{
+	// Magic factor of 0.33
+	int repairCost = (int)floor(Archetype::GetShip(Players[iClientID].iShipArchetype)->fHitPoints * (1 - Players[iClientID].fRelativeHealth) / 100 * 33);
+
+	vector<ushort> sIDs;
+	list<EquipDesc> &equip = Players[iClientID].equipDescList.equip;
+	for (list<EquipDesc>::iterator item = equip.begin(); item != equip.end(); item++)
+	{
+		if (!item->bMounted || item->fHealth == 1)
+			continue;
+
+		const GoodInfo *info = GoodList_get()->find_by_archetype(item->iArchID);
+		if (info == nullptr)
+			continue;
+
+		// Magic factor of 0.3
+		repairCost += (int)floor(info->fPrice * (1 - item->fHealth) / 10 * 3);
+		sIDs.push_back(item->sID);
+	}
+
+	int iCash = 0;
+	wstring wscCharName = (const wchar_t*)Players.GetActiveCharacterName(iClientID);
+	HkGetCash(wscCharName, iCash);
+
+	if (iCash < repairCost)
+	{
+		PrintUserCmdText(iClientID, L"Auto-Buy(Repair): FAILED! Insufficient Credits");
+		return;
+	}
+
+	HkAddCash(wscCharName, -repairCost);
+
+	// Not doing this in the above loop because we need to ensure the player has the credits for it.
+	for (list<EquipDesc>::iterator item = equip.begin(); item != equip.end(); item++)
+		if (find(sIDs.begin(), sIDs.end(), item->sID) != sIDs.end())
+			item->fHealth = 1;
+
+	// TODO: Why does DynPacket stuff in HkSetEquip and for SETCOLLISIONGROUPS below seem to require the server to be running in compatibility mode with an older OS?
+	if (!sIDs.empty())
+		HkSetEquip(iClientID, equip);
+
+	if (Players[iClientID].fRelativeHealth != 1)
+	{
+		GetClientInterface()->Send_FLPACKET_SERVER_SETHULLSTATUS(iClientID, 1);
+		Players[iClientID].fRelativeHealth = 1;
+	}
+
+	// Repair all collision groups.
+	if (Players[iClientID].collisionGroupDesc.count)
+	{	
+		// Calculate packet size. First two bytes reserved for count of groups.
+		uint groupBufSize = 2 + sizeof(COLLISION_GROUP) * Players[iClientID].collisionGroupDesc.count;
+
+		FLPACKET* packet = FLPACKET::Create(groupBufSize, FLPACKET::FLPACKET_SERVER_SETCOLLISIONGROUPS);
+		FLPACKET_SETEQUIPMENT* pSetEquipment = (FLPACKET_SETEQUIPMENT*)packet->content;
+
+		// Add groups to packet.
+		uint index = 0;
+		for (int i = 0; i != Players[iClientID].collisionGroupDesc.count; i++)
+		{
+			pSetEquipment->count++;
+
+			COLLISION_GROUP group;
+			// Group IDs seem to begin at 4
+			group.sID = i + 4;
+			group.fHealth = 1;
+
+			byte* buf = (byte*)&group;
+			for (int i = 0; i < sizeof(COLLISION_GROUP); i++)
+				pSetEquipment->items[index++] = buf[i];
+		}
+
+		packet->SendTo(iClientID);
+	}
+
+	if (repairCost)
+		PrintUserCmdText(iClientID, L"Auto-Buy(Repair): Cost %s$", ToMoneyStr(repairCost).c_str());
+
+	return;
+}
+
+void PlayerAutobuy(uint iClientID, uint iBaseID)
+{
+	map<uint, int> tempmap;
+
 	// player cargo
 	int iRemHoldSize;
 	list<CARGO_INFO> lstCargo;
@@ -165,15 +553,11 @@ void HkPlayerAutoBuy(uint iClientID, uint iBaseID)
 	// shopping cart
 	list<AUTOBUY_CARTITEM> lstCart;
 
-	if (AutoBuyInfo[iClientID].bAutoBuyReload)
+	if (mapAutobuyPlayerInfo[iClientID].bAutobuyBB)
 	{ // shield bats & nanobots
 		Archetype::Ship *ship = Archetype::GetShip(Players[iClientID].iShipArchetype);
-
-		uint iNanobotsID;
-		pub::GetGoodID(iNanobotsID, "ge_s_repair_01");
+		
 		uint iRemNanobots = ship->iMaxNanobots;
-		uint iShieldBatsID;
-		pub::GetGoodID(iShieldBatsID, "ge_s_battery_01");
 		uint iRemShieldBats = ship->iMaxShieldBats;
 		bool bNanobotsFound = false;
 		bool bShieldBattsFound = false;
@@ -215,8 +599,8 @@ void HkPlayerAutoBuy(uint iClientID, uint iBaseID)
 		}
 	}
 
-	if (AutoBuyInfo[iClientID].bAutoBuyCD || AutoBuyInfo[iClientID].bAutoBuyCM || AutoBuyInfo[iClientID].bAutoBuyMines ||
-		AutoBuyInfo[iClientID].bAutoBuyMissiles || AutoBuyInfo[iClientID].bAutoBuyTorps)
+	if (mapAutobuyPlayerInfo[iClientID].bAutoBuyCD || mapAutobuyPlayerInfo[iClientID].bAutoBuyCM || mapAutobuyPlayerInfo[iClientID].bAutoBuyMines ||
+		mapAutobuyPlayerInfo[iClientID].bAutoBuyMissiles || mapAutobuyPlayerInfo[iClientID].bAutobuyMunition || mapAutobuyPlayerInfo[iClientID].bAutoBuyTorps)
 	{
 		// add mounted equip to a new list and eliminate double equipment(such as 2x lancer etc)
 		list<CARGO_INFO> lstMounted;
@@ -225,9 +609,15 @@ void HkPlayerAutoBuy(uint iClientID, uint iBaseID)
 			if (!(*it).bMounted)
 				continue;
 
+			if (mapStackableItems.find(it->iArchID) != mapStackableItems.end())
+			{
+				if (tempmap[it->iArchID] < mapStackableItems[it->iArchID])
+					tempmap[it->iArchID] += 1;
+			}
+
 			bool bFound = false;
 			foreach(lstMounted, CARGO_INFO, it2)
-			{
+			{				
 				if ((*it2).iArchID == (*it).iArchID)
 				{
 					bFound = true;
@@ -252,28 +642,68 @@ void HkPlayerAutoBuy(uint iClientID, uint iBaseID)
 			EQ_TYPE eq_type = HkGetEqType(eq);
 			if (eq_type == ET_MINE)
 			{
-				if (AutoBuyInfo[iClientID].bAutoBuyMines)
+				if (mapAutobuyPlayerInfo[iClientID].bAutoBuyMines)
 					ADD_EQUIP_TO_CART(L"Mines")
 			}
 			else if (eq_type == ET_CM)
 			{
-				if (AutoBuyInfo[iClientID].bAutoBuyCM)
+				if (mapAutobuyPlayerInfo[iClientID].bAutoBuyCM)
 					ADD_EQUIP_TO_CART(L"Countermeasures")
 			}
 			else if (eq_type == ET_TORPEDO)
 			{
-				if (AutoBuyInfo[iClientID].bAutoBuyTorps)
-					ADD_EQUIP_TO_CART(L"Torpedos")
+				if (mapAutobuyPlayerInfo[iClientID].bAutoBuyTorps)
+				{
+					if (mapStackableItems.find(eq->get_id()) != mapStackableItems.end())
+					{
+						ADD_EQUIP_TO_CART_STACKABLE(L"Torpedos")
+					}
+					else
+					{
+						ADD_EQUIP_TO_CART(L"Torpedos")
+					}
+				}
 			}
 			else if (eq_type == ET_CD)
 			{
-				if (AutoBuyInfo[iClientID].bAutoBuyCD)
+				if (mapAutobuyPlayerInfo[iClientID].bAutoBuyCD)
 					ADD_EQUIP_TO_CART(L"Cruise Disruptors")
 			}
 			else if (eq_type == ET_MISSILE)
 			{
-				if (AutoBuyInfo[iClientID].bAutoBuyMissiles)
-					ADD_EQUIP_TO_CART(L"Missiles")
+				if (mapAutobuyPlayerInfo[iClientID].bAutoBuyMissiles)
+				{
+					if (mapStackableItems.find(eq->get_id()) != mapStackableItems.end())
+					{
+						ADD_EQUIP_TO_CART_STACKABLE(L"Missiles")
+					}
+					else
+					{
+						ADD_EQUIP_TO_CART(L"Missiles")
+					}
+				}
+			}
+			else if (eq_type == ET_GUN)
+			{
+				if (mapAutobuyPlayerInfo[iClientID].bAutobuyMunition)
+				{
+					if (mapStackableItems.find(eq->get_id()) != mapStackableItems.end())
+					{
+						ADD_EQUIP_TO_CART_STACKABLE(L"Munitions")
+					}
+					else
+					{
+						ADD_EQUIP_TO_CART(L"Munitions")
+					}
+				}
+			}
+
+			//FLHook handling
+			if (mapAutobuyFLHookExtras.find(eq->iArchID) != mapAutobuyFLHookExtras.end())
+			{
+				//Cloak Fuel
+				if (mapAutobuyPlayerInfo[iClientID].bAutobuyCloak)
+					ADD_EQUIP_TO_CART_FLHOOK(L"Cloak Batteries")
 			}
 		}
 	}
@@ -314,7 +744,7 @@ void HkPlayerAutoBuy(uint iClientID, uint iBaseID)
 				if (iBaseRep == -1)
 					continue; // rep can't be determined yet(space object not created yet?)
 
-				// get player rep
+							  // get player rep
 				int iRepID;
 				pub::Player::GetRep(iClientID, iRepID);
 
@@ -340,6 +770,7 @@ void HkPlayerAutoBuy(uint iClientID, uint iBaseID)
 		{
 			uint iNewCount = (uint)(iRemHoldSize / eq->fVolume);
 			if (!iNewCount) {
+				//				PrintUserCmdText(iClientID, L"Auto-Buy(%s): FAILED! Insufficient cargo space", (*it4).wscDescription.c_str());
 				continue;
 			}
 			else
@@ -353,66 +784,108 @@ void HkPlayerAutoBuy(uint iClientID, uint iBaseID)
 			HkAddCash(ARG_CLIENTID(iClientID), -iCost);
 			iCash -= iCost;
 			iRemHoldSize -= ((int)eq->fVolume * (*it4).iCount);
+
+
+			//Turns out we need to use HkAddCargo due to anticheat problems
 			HkAddCargo(ARG_CLIENTID(iClientID), (*it4).iArchID, (*it4).iCount, false);
-			PrintUserCmdText(iClientID, L"Auto-Buy(%s): Bought %u unit(s), cost: %s$", (*it4).wscDescription.c_str(), (*it4).iCount, ToMoneyStr(iCost).c_str());
+
+			// add the item, dont use hkaddcargo for performance/bug reasons
+			// assume we only mount multicount goods (missiles, ammo, bots)
+			//pub::Player::AddCargo(iClientID, (*it4).iArchID, (*it4).iCount, 1, false);
+
+			if ((*it4).iCount != 0)
+			{
+				PrintUserCmdText(iClientID, L"Auto-Buy(%s): Bought %d unit(s), cost: %s$", (*it4).wscDescription.c_str(), (*it4).iCount, ToMoneyStr(iCost).c_str());
+			}
 		}
 	}
+
+
+}
+
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//Actual Code
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+/** Clean up when a client disconnects */
+void ClearClientInfo(uint iClientID)
+{
+	returncode = DEFAULT_RETURNCODE;
+	mapAutobuyPlayerInfo.erase(iClientID);
+}
+
+void __stdcall CharacterSelect_AFTER(struct CHARACTER_ID const &charId, unsigned int iClientID)
+{
+	returncode = DEFAULT_RETURNCODE;
+	ClearClientInfo(iClientID);
+
+	mapAutobuyPlayerInfo[iClientID].bAutobuyBB = HookExt::IniGetB(iClientID, "autobuy.bb");
+	mapAutobuyPlayerInfo[iClientID].bAutoBuyCD = HookExt::IniGetB(iClientID, "autobuy.cd");
+	mapAutobuyPlayerInfo[iClientID].bAutobuyCloak = HookExt::IniGetB(iClientID, "autobuy.cloak");
+	mapAutobuyPlayerInfo[iClientID].bAutoBuyCM = HookExt::IniGetB(iClientID, "autobuy.cm");
+	mapAutobuyPlayerInfo[iClientID].bAutoBuyMines = HookExt::IniGetB(iClientID, "autobuy.mines");
+	mapAutobuyPlayerInfo[iClientID].bAutoBuyMissiles = HookExt::IniGetB(iClientID, "autobuy.missiles");
+	mapAutobuyPlayerInfo[iClientID].bAutobuyMunition = HookExt::IniGetB(iClientID, "autobuy.munition");
+	mapAutobuyPlayerInfo[iClientID].bAutoBuyTorps = HookExt::IniGetB(iClientID, "autobuy.torps");
+	mapAutobuyPlayerInfo[iClientID].bAutoRepair = HookExt::IniGetB(iClientID, "autobuy.repair");
+	
 }
 
 void __stdcall BaseEnter_AFTER(unsigned int iBaseID, unsigned int iClientID)
 {
-	returncode = DEFAULT_RETURNCODE;
+	pub::Player::GetBase(iClientID, iBaseID);
+	PlayerAutobuy(iClientID, iBaseID);
 
-	CAccount *acc = Players.FindAccountFromClientID(iClientID);
-	wstring wscDir;
-	HkGetAccountDirName(acc, wscDir);
-	string scUserFile = scAcctPath + wstos(wscDir) + "\\flhookuser.ini";
-
-	// read autobuy
-	wstring wscFilename;
-	HkGetCharFileName(ARG_CLIENTID(iClientID), wscFilename);
-	string scSection = "autobuy_" + wstos(wscFilename);
-
-	AutoBuyInfo[iClientID].bAutoBuyMissiles = IniGetB(scUserFile, scSection, "missiles", false);
-	AutoBuyInfo[iClientID].bAutoBuyMines = IniGetB(scUserFile, scSection, "mines", false);
-	AutoBuyInfo[iClientID].bAutoBuyTorps = IniGetB(scUserFile, scSection, "torps", false);
-	AutoBuyInfo[iClientID].bAutoBuyCD = IniGetB(scUserFile, scSection, "cd", false);
-	AutoBuyInfo[iClientID].bAutoBuyCM = IniGetB(scUserFile, scSection, "cm", false);
-	AutoBuyInfo[iClientID].bAutoBuyReload = IniGetB(scUserFile, scSection, "reload", false);
-
-	try {
-		HkPlayerAutoBuy(iClientID, iBaseID);
-	}
-	catch (HK_ERROR e) {
-		AddLog("Autobuy error: %s", HkErrGetText(e));
-		return;
-	}
+	if (mapAutobuyPlayerInfo[iClientID].bAutoRepair)
+		PlayerAutorepair(iClientID);
 }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-typedef void(*_UserCmdProc)(uint, const wstring &);
+void __stdcall PlayerLaunch_AFTER(unsigned int iShip, unsigned int iClientID)
+{
+	returncode = DEFAULT_RETURNCODE;
+	CheckforStackables(iClientID);
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//Client command processing
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+typedef bool(*_UserCmdProc)(uint, const wstring &, const wstring &, const wchar_t*);
 
 struct USERCMD
 {
 	wchar_t *wszCmd;
 	_UserCmdProc proc;
+	wchar_t *usage;
 };
 
 USERCMD UserCmds[] =
 {
-	{ L"/autobuy",		UserCmd_AutoBuy},
+	{ L"/autobuy", UserCmd_AutoBuy, L"Usage: /autobuy" },
+	{ L"/autobuy*", UserCmd_AutoBuy, L"Usage: /autobuy" },
 };
 
-EXPORT bool UserCmd_Process(uint iClientID, const wstring &wscCmd)
+/**
+This function is called by FLHook when a user types a chat string. We look at the
+string they've typed and see if it starts with one of the above commands. If it
+does we try to process it.
+*/
+bool UserCmd_Process(uint iClientID, const wstring &wscCmd)
 {
+	returncode = DEFAULT_RETURNCODE;
 
-	wstring wscCmdLower = ToLower(wscCmd);
+	wstring wscCmdLineLower = ToLower(wscCmd);
 
-
+	// If the chat string does not match the USER_CMD then we do not handle the
+	// command, so let other plugins or FLHook kick in. We require an exact match
 	for (uint i = 0; (i < sizeof(UserCmds) / sizeof(USERCMD)); i++)
 	{
-		if (wscCmdLower.find(ToLower(UserCmds[i].wszCmd)) == 0)
+
+		if (wscCmdLineLower.find(UserCmds[i].wszCmd) == 0)
 		{
+			// Extract the parameters string from the chat string. It should
+			// be immediately after the command and a space.
 			wstring wscParam = L"";
 			if (wscCmd.length() > wcslen(UserCmds[i].wszCmd))
 			{
@@ -420,49 +893,18 @@ EXPORT bool UserCmd_Process(uint iClientID, const wstring &wscCmd)
 					continue;
 				wscParam = wscCmd.substr(wcslen(UserCmds[i].wszCmd) + 1);
 			}
-			UserCmds[i].proc(iClientID, wscParam);
 
-			returncode = SKIPPLUGINS_NOFUNCTIONCALL;
-			return true;
+			// Dispatch the command to the appropriate processing function.
+			if (UserCmds[i].proc(iClientID, wscCmd, wscParam, UserCmds[i].usage))
+			{
+				// We handled the command tell FL hook to stop processing this
+				// chat string.
+				returncode = SKIPPLUGINS_NOFUNCTIONCALL; // we handled the command, return immediatly
+				return true;
+			}
 		}
 	}
-
-	returncode = DEFAULT_RETURNCODE;
 	return false;
-}
-
-EXPORT void UserCmd_Help(uint iClientID, const wstring &wscParam)
-{
-	PRINT_ERROR();
-}
-
-EXPORT void LoadSettings()
-{
-	returncode = DEFAULT_RETURNCODE;
-}
-
-BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved)
-{
-	srand((uint)time(0));
-	// If we're being loaded from the command line while FLHook is running then
-	// set_scCfgFile will not be empty so load the settings as FLHook only
-	// calls load settings on FLHook startup and .rehash.
-	if (fdwReason == DLL_PROCESS_ATTACH)
-	{
-		if (set_scCfgFile.length() > 0)
-			LoadSettings();
-	}
-	else if (fdwReason == DLL_PROCESS_DETACH)
-	{
-	}
-	return true;
-}
-
-/// Hook will call this function after calling a plugin function to see if we the
-/// processing to continue
-EXPORT PLUGIN_RETURNCODE Get_PluginReturnCode()
-{
-	return returncode;
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -472,15 +914,18 @@ EXPORT PLUGIN_RETURNCODE Get_PluginReturnCode()
 EXPORT PLUGIN_INFO* Get_PluginInfo()
 {
 	PLUGIN_INFO* p_PI = new PLUGIN_INFO();
-	p_PI->sName = "Autobuy";
+	p_PI->sName = "Autobuy by Discovery Development Team";
 	p_PI->sShortName = "autobuy";
 	p_PI->bMayPause = true;
 	p_PI->bMayUnload = true;
 	p_PI->ePluginReturnCode = &returncode;
-
+	
 	p_PI->lstHooks.push_back(PLUGIN_HOOKINFO((FARPROC*)&LoadSettings, PLUGIN_LoadSettings, 0));
 	p_PI->lstHooks.push_back(PLUGIN_HOOKINFO((FARPROC*)&BaseEnter_AFTER, PLUGIN_HkIServerImpl_BaseEnter_AFTER, 0));
+	p_PI->lstHooks.push_back(PLUGIN_HOOKINFO((FARPROC*)&CharacterSelect_AFTER, PLUGIN_HkIServerImpl_CharacterSelect_AFTER, 0));
+	p_PI->lstHooks.push_back(PLUGIN_HOOKINFO((FARPROC*)&ClearClientInfo, PLUGIN_ClearClientInfo, 0));
 	p_PI->lstHooks.push_back(PLUGIN_HOOKINFO((FARPROC*)&UserCmd_Process, PLUGIN_UserCmd_Process, 0));
-	p_PI->lstHooks.push_back(PLUGIN_HOOKINFO((FARPROC*)&UserCmd_Help, PLUGIN_UserCmd_Help, 0));
+	p_PI->lstHooks.push_back(PLUGIN_HOOKINFO((FARPROC*)&PlayerLaunch_AFTER, PLUGIN_HkIServerImpl_PlayerLaunch_AFTER, 0));
+
 	return p_PI;
 }

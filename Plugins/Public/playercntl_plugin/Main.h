@@ -183,7 +183,6 @@ namespace CargoDrop
 namespace Restart
 {
 	void LoadSettings(const string &scPluginCfgFile);
-	void LoadShipPrices();
 	bool UserCmd_ShowRestarts(uint iClientID, const wstring &wscCmd, const wstring &wscParam, const wchar_t *usage);
 	bool UserCmd_Restart(uint iClientID, const wstring &wscCmd, const wstring &wscParam, const wchar_t *usage);
 	void Timer();
@@ -251,9 +250,6 @@ namespace Message
 	bool UserCmd_BuiltInCmdHelp(uint iClientID, const wstring &wscCmd, const wstring &wscParam, const wchar_t *usage);
 	bool UserCmd_MailShow(uint iClientID, const wstring &wscCmd, const wstring &wscParam, const wchar_t *usage);
 	bool UserCmd_MailDel(uint iClientID, const wstring &wscCmd, const wstring &wscParam, const wchar_t *usage);
-	bool UserCmd_Me(uint iClientID, const wstring &wscCmd, const wstring &wscParam, const wchar_t *usage);
-	bool UserCmd_Do(uint iClientID, const wstring &wscCmd, const wstring &wscParam, const wchar_t *usage);
-	bool RedText(wstring wscXMLMsg, uint iSystemID);
 	void UserCmd_Process(uint iClientID, const wstring &wscCmd);
 
 	void AdminCmd_SendMail(CCmds *cmds, const wstring &wscCharname, const wstring &wscMsg);
