@@ -243,8 +243,8 @@ void __stdcall SPMunitionCollision(struct SSPMunitionCollisionInfo const & ci, u
 
 
 static bool IsDockingAllowed(uint iShip, uint iDockTarget, uint iClientID)
-{	
-	// If the player's rep is less/equal -0.55 to the owner of the station
+{
+	// If the player's rep is less/equal -0.6 to the owner of the station
 	// then refuse the docking request
 	int iSolarRep;
 	pub::SpaceObj::GetSolarRep(iDockTarget, iSolarRep);
@@ -254,7 +254,7 @@ static bool IsDockingAllowed(uint iShip, uint iDockTarget, uint iClientID)
 
 	float fAttitude = 0.0f;
 	pub::Reputation::GetAttitude(iSolarRep, iPlayerRep, fAttitude);
-	if (fAttitude <= -0.55f)
+	if (fAttitude <= -0.6f)
 	{
 		pub::Player::SendNNMessage(iClientID, pub::GetNicknameId("info_access_denied"));
 		wstring wscMsg[3] = {
@@ -262,7 +262,7 @@ static bool IsDockingAllowed(uint iShip, uint iDockTarget, uint iClientID)
 			L"Access Denied! Docking request rejected. Your papers are no good.",
 			L"Access Denied! You can't dock here. Your reputation stinks."
 		};
-		PrintUserCmdText(iClientID, wscMsg[rand()%3]);			
+		PrintUserCmdText(iClientID, wscMsg[rand() % 3]);
 		return false;
 	}
 
