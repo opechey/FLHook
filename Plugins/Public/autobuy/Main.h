@@ -12,16 +12,11 @@
 #include <FLHook.h>
 #include <plugin.h>
 #include <PluginUtilities.h>
+#include "Main.h"
+#include <sstream>
+#include <iostream>
+#include <hookext_exports.h>
 
 using namespace std;
-
-
-#pragma pack(push, 1)
-struct COLLISION_GROUP
-{
-	ushort sID;
-	float fHealth;
-};
-#pragma pack(pop)
 
 #endif
