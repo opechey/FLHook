@@ -358,6 +358,7 @@ HK_ERROR HkRemoveCargo(const wstring &wscCharname, uint iID, int iCount)
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////
 HK_ERROR HkAddCargo(const wstring &wscCharname, uint iGoodID, int iCount, bool bMission)
 {
 	HK_GET_CLIENTID(iClientID, wscCharname);
@@ -366,15 +367,15 @@ HK_ERROR HkAddCargo(const wstring &wscCharname, uint iGoodID, int iCount, bool b
 		return HKE_PLAYER_NOT_LOGGED_IN;
 
 	/*	// anti-cheat related
-		char *szClassPtr;
-		memcpy(&szClassPtr, &Players, 4);
-		szClassPtr += 0x418 * (iClientID - 1);
-		EquipDescList *edlList = (EquipDescList*)szClassPtr + 0x328;
-		bool bCargoFound = true;
-		if(!edlList->find_matching_cargo(iGoodID, 0, 1))
-			bCargoFound = false;*/
+	char *szClassPtr;
+	memcpy(&szClassPtr, &Players, 4);
+	szClassPtr += 0x418 * (iClientID - 1);
+	EquipDescList *edlList = (EquipDescList*)szClassPtr + 0x328;
+	bool bCargoFound = true;
+	if(!edlList->find_matching_cargo(iGoodID, 0, 1))
+	bCargoFound = false;*/
 
-			// add
+	// add
 	const GoodInfo *gi;
 	if (!(gi = GoodList::find_by_id(iGoodID)))
 		return HKE_INVALID_GOOD;
@@ -421,41 +422,16 @@ HK_ERROR HkAddCargo(const wstring &wscCharname, uint iGoodID, int iCount, bool b
 
 	if (iBase)
 	{ // player docked on base
-		///////////////////////////////////////////////////
-		// fix, else we get anti-cheat msg when undocking
-		// this DOES NOT disable anti-cheat-detection, we're
-		// just making some adjustments so that we dont get kicked
-
-		Server.BaseEnter(iBase, iClientID);
-		if (iLocation)
-			Server.LocationEnter(iLocation, iClientID);
-
-		/*		// fix "Ship or Equipment not sold on base" kick
-				if(!bCargoFound)
-				{
-					// get last equipid
-					char *szLastEquipID = szClassPtr + 0x3C8;
-					ushort sEquipID;
-					memcpy(&sEquipID, szLastEquipID, 2);
-
-					// add to check-list which is being compared to the users equip-list when saving char
-					EquipDesc ed;
-					memset(&ed, 0, sizeof(ed));
-					ed.id = sEquipID;
-					ed.count = iCount;
-					ed.archid = iGoodID;
-					edlList->add_equipment_item(ed, true);
-				}
-
-				// fix "Ship Related" kick, update crc
-				ulong lCRC;
-				__asm
-				{
-					mov ecx, [szClassPtr]
-					call [CRCAntiCheat]
-					mov [lCRC], eax
-				}
-				memcpy(szClassPtr + 0x320, &lCRC, 4);*/
+		/*
+		fix, else we get anti-cheat msg when undocking
+		this DOES NOT disable anti-cheat-detection, we're
+		just making some adjustments so that we dont get kicked
+		*/
+		if (iBase) {
+			Server.BaseEnter(iBase, iClientID);
+			if (iLocation)
+				Server.LocationEnter(iLocation, iClientID);
+		}
 	}
 
 	return HKE_OK;
