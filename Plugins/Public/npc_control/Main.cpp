@@ -73,6 +73,7 @@ struct NPC_ARCHTYPESSTRUCT
 	uint Shiparch;
 	uint Loadout;
 	uint IFF;
+	uint Infocard;
 	int Graph;
 };
 
@@ -307,11 +308,14 @@ void LoadNPCInfo()
 						setnpcstruct.Shiparch = CreateID(ini.get_value_string(1));
 						setnpcstruct.Loadout = CreateID(ini.get_value_string(2));
 
-						//IFF calc
+						// IFF calc
 						 pub::Reputation::GetReputationGroup(setnpcstruct.IFF, ini.get_value_string(3));
 
-						//Selected graph
+						// Selected graph
 						setnpcstruct.Graph = ini.get_value_int(4);
+
+						// Infocard
+						setnpcstruct.Infocard = ini.get_value_int(5);
 
 						mapNPCArchtypes[thenpcname] = setnpcstruct;
 					}
@@ -503,8 +507,14 @@ void CreateNPC(wstring name, Vector pos, Matrix rot, uint iSystem)
 		// below shows the use of multiple part names.
 		FmtStr pilot_name(0, 0);
 		pilot_name.begin_mad_lib(16163); // ids of "%s0 %s1"
-		pilot_name.append_string(rand_name());  // ids that replaces %s0
-		pilot_name.append_string(rand_name()); // ids that replaces %s1
+
+		if (arch.Infocard != 0) {
+			pilot_name.append_string(arch.Infocard);
+		}
+		else {
+			pilot_name.append_string(rand_name());  // ids that replaces %s0
+			pilot_name.append_string(rand_name()); // ids that replaces %s1
+		}
 		pilot_name.end_mad_lib();
 
 		pub::Reputation::Alloc(si.iRep, scanner_name, pilot_name);
