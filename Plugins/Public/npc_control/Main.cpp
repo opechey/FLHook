@@ -74,6 +74,7 @@ struct NPC_ARCHTYPESSTRUCT
 	uint Loadout;
 	uint IFF;
 	uint Infocard;
+	uint Infocard2;
 	int Graph;
 };
 
@@ -316,6 +317,7 @@ void LoadNPCInfo()
 
 						// Infocard
 						setnpcstruct.Infocard = ini.get_value_int(5);
+						setnpcstruct.Infocard2 = ini.get_value_int(6);
 
 						mapNPCArchtypes[thenpcname] = setnpcstruct;
 					}
@@ -510,6 +512,9 @@ void CreateNPC(wstring name, Vector pos, Matrix rot, uint iSystem)
 
 		if (arch.Infocard != 0) {
 			pilot_name.append_string(arch.Infocard);
+			if (arch.Infocard2 != 0) {
+				pilot_name.append_string(arch.Infocard2);
+			}
 		}
 		else {
 			pilot_name.append_string(rand_name());  // ids that replaces %s0
