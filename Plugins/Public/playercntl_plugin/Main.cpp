@@ -42,6 +42,7 @@ bool set_bEnableRenameMe = false;
 bool set_bEnableMoveChar = false;
 bool set_bEnableRestart = false;
 bool set_bEnableGiveCash = false;
+bool set_bEnableLoginSound = false;
 bool set_bLocalTime = false;
 
 /// Local chat range
@@ -49,6 +50,9 @@ float set_iLocalChatRange = 9999;
 
 float set_fSpinProtectMass;
 float set_fSpinImpulseMultiplier;
+
+// Vector to store sounds
+vector<int> sounds;
 
 /** A return code to indicate to FLHook if we want the hook processing to continue. */
 PLUGIN_RETURNCODE returncode;
@@ -113,6 +117,7 @@ void LoadSettings()
 	set_bEnablePimpShip = IniGetB(scPluginCfgFile, "General", "EnablePimpShip", false);
 	set_bEnableRestart = IniGetB(scPluginCfgFile, "General", "EnableRestart", false);
 	set_bEnableGiveCash = IniGetB(scPluginCfgFile, "General", "EnableGiveCash", false);
+	set_bEnableLoginSound = IniGetB(scPluginCfgFile, "General", "EnableLoginSound", false);
 	
 	set_fSpinProtectMass = IniGetF(scPluginCfgFile, "General", "SpinProtectionMass", 180.0f);
 	set_fSpinImpulseMultiplier = IniGetF(scPluginCfgFile, "General", "SpinProtectionMultiplier", -1.0f);
@@ -139,6 +144,28 @@ void LoadSettings()
 	SystemSensor::LoadSettings(scPluginCfgFile);
 	CrashCatcher::Init();
 	Rename::ReloadLockedShips();
+
+	// Load sounds from config if enabled
+	if (set_bEnableLoginSound == true) {
+		INI_Reader ini;
+		if (ini.open(scPluginCfgFile.c_str(), false))
+		{
+			while (ini.read_header())
+			{
+				if (ini.is_header("Sounds"))
+				{
+					while (ini.read_value())
+					{
+						if (ini.is_value("sound"))
+						{
+							sounds.push_back(CreateID(ini.get_value_string(0)));
+						}
+					}
+				}
+			}
+			ini.close();
+		}
+	}
 }
 
 /** Clean up when a client disconnects */
@@ -216,8 +243,8 @@ void __stdcall SPMunitionCollision(struct SSPMunitionCollisionInfo const & ci, u
 
 
 static bool IsDockingAllowed(uint iShip, uint iDockTarget, uint iClientID)
-{	
-	// If the player's rep is less/equal -0.55 to the owner of the station
+{
+	// If the player's rep is less/equal -0.6 to the owner of the station
 	// then refuse the docking request
 	int iSolarRep;
 	pub::SpaceObj::GetSolarRep(iDockTarget, iSolarRep);
@@ -227,7 +254,7 @@ static bool IsDockingAllowed(uint iShip, uint iDockTarget, uint iClientID)
 
 	float fAttitude = 0.0f;
 	pub::Reputation::GetAttitude(iSolarRep, iPlayerRep, fAttitude);
-	if (fAttitude <= -0.55f)
+	if (fAttitude <= -0.6f)
 	{
 		pub::Player::SendNNMessage(iClientID, pub::GetNicknameId("info_access_denied"));
 		wstring wscMsg[3] = {
@@ -235,7 +262,7 @@ static bool IsDockingAllowed(uint iShip, uint iDockTarget, uint iClientID)
 			L"Access Denied! Docking request rejected. Your papers are no good.",
 			L"Access Denied! You can't dock here. Your reputation stinks."
 		};
-		PrintUserCmdText(iClientID, wscMsg[rand()%3]);			
+		PrintUserCmdText(iClientID, wscMsg[rand() % 3]);
 		return false;
 	}
 
@@ -342,6 +369,9 @@ namespace HkIServerImpl
 	void __stdcall Login(struct SLoginInfo const &li, unsigned int iClientID)
 	{
 		returncode = DEFAULT_RETURNCODE;
+
+		// Player sound when player logs in (if enabled)
+		pub::Audio::PlaySoundEffect(iClientID, sounds[rand() % boost::size(sounds)]);
 
 		CAccount *acc = Players.FindAccountFromClientID(iClientID);
 		if (acc)
@@ -931,6 +961,8 @@ USERCMD UserCmds[] =
 	{ L"/drc",		GiveCash::UserCmd_DrawCash,		L"Usage: /drawcash <charname> <code> <cash> or /drc ..." },
 	{ L"/shc",		GiveCash::UserCmd_ShowCash,		L"Usage: /showcash <charname> <code> or /shc ..." },
 	{ L"/drawcash",		GiveCash::UserCmd_DrawCash,		L"Usage: /drawcash <charname> <code> <cash> or /drc ..." },
+	{ L"/me",			Message::UserCmd_Me, L"Usage: /me <message>" },
+	{ L"/do",			Message::UserCmd_Do, L"Usage: /do <message>" },
 	{ L"/group",		Message::UserCmd_GroupMsg, L"Usage: /group <message> or /g ..." },
 	{ L"/g",			Message::UserCmd_GroupMsg, L"Usage: /group <message> or /g ..." },
 	{ L"/local",		Message::UserCmd_LocalMsg, L"Usage: /local <message> or /l ...>" },

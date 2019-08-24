@@ -1,17 +1,13 @@
-FLHook Discovery 3.1.0
+FLHook Discovery 3.1.0 (Custom Zoner Edition)
 =============
 
-This is the public repository for Discovery Freelancer's FLHook.
-The client hook and the server anticheat are not available due to their sensitivity.
-It's also currently missing ducktales and disabledock.
+This is a fork of Discovery Freelancer's FLHook for 24/7 Zoner Universe
 
-The original SVN can be found here: http://forge.the-starport.net/projects/flhookplugin
+This fork aims to make FLHook more Vanilla compatible as well as add features deemed necessary for Zoner Universe
 
 This project is configured to run under Visual Studio 2017. Everybody can contribute with the Community Edition.
-The Windows SDK version is 8.1. 
+The Windows SDK version is 10.0.17763.0 
 The compiler is VC141.
-
-Our current starport revision is #267.
 
 If you find old contributions you wish to refactor, you are welcome to do so
 

@@ -353,25 +353,26 @@ HK_ERROR HkRemoveCargo(const wstring &wscCharname, uint iID, int iCount)
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////
 HK_ERROR HkAddCargo(const wstring &wscCharname, uint iGoodID, int iCount, bool bMission)
 {
 	HK_GET_CLIENTID(iClientID, wscCharname);
 
-	if(iClientID == -1 || HkIsInCharSelectMenu(iClientID))
+	if (iClientID == -1 || HkIsInCharSelectMenu(iClientID))
 		return HKE_PLAYER_NOT_LOGGED_IN;
 
-/*	// anti-cheat related
+	/*	// anti-cheat related
 	char *szClassPtr;
 	memcpy(&szClassPtr, &Players, 4);
 	szClassPtr += 0x418 * (iClientID - 1);
 	EquipDescList *edlList = (EquipDescList*)szClassPtr + 0x328;
 	bool bCargoFound = true;
 	if(!edlList->find_matching_cargo(iGoodID, 0, 1))
-		bCargoFound = false;*/
+	bCargoFound = false;*/
 
 	// add
 	const GoodInfo *gi;
-	if(!(gi = GoodList::find_by_id(iGoodID)))
+	if (!(gi = GoodList::find_by_id(iGoodID)))
 		return HKE_INVALID_GOOD;
 
 	bool bMultiCount;
@@ -384,15 +385,15 @@ HK_ERROR HkAddCargo(const wstring &wscCharname, uint iGoodID, int iCount, bool b
 	pub::Player::GetLocation(iClientID, iLocation);
 
 	// trick cheat detection
-	if(iBase) {
-		if(iLocation)
-			Server.LocationExit(iLocation,iClientID);
-		Server.BaseExit(iBase,iClientID);
-		if(!HkIsValidClientID(iClientID)) // got cheat kicked
+	if (iBase) {
+		if (iLocation)
+			Server.LocationExit(iLocation, iClientID);
+		Server.BaseExit(iBase, iClientID);
+		if (!HkIsValidClientID(iClientID)) // got cheat kicked
 			return HKE_PLAYER_NOT_LOGGED_IN;
 	}
 
-	if(bMultiCount) { // it's a good that can have multiple units(commodities, missile ammo, etc)
+	if (bMultiCount) { // it's a good that can have multiple units(commodities, missile ammo, etc)
 		int iRet;
 
 		// we need to do this, else server or client may crash
@@ -400,7 +401,7 @@ HK_ERROR HkAddCargo(const wstring &wscCharname, uint iGoodID, int iCount, bool b
 		HkEnumCargo(wscCharname, lstCargo, iRet);
 		foreach(lstCargo, CARGO_INFO, it)
 		{
-			if(((*it).iArchID == iGoodID) && ((*it).bMission != bMission))
+			if (((*it).iArchID == iGoodID) && ((*it).bMission != bMission))
 			{
 				HkRemoveCargo(wscCharname, (*it).iID, (*it).iCount);
 				iCount += (*it).iCount;
@@ -408,48 +409,24 @@ HK_ERROR HkAddCargo(const wstring &wscCharname, uint iGoodID, int iCount, bool b
 		}
 
 		pub::Player::AddCargo(iClientID, iGoodID, iCount, 1, bMission);
-	} else {
-		for(int i = 0; (i < iCount); i++)
+	}
+	else {
+		for (int i = 0; (i < iCount); i++)
 			pub::Player::AddCargo(iClientID, iGoodID, 1, 1, bMission);
 	}
 
-	if(iBase)
+	if (iBase)
 	{ // player docked on base
-		///////////////////////////////////////////////////
-		// fix, else we get anti-cheat msg when undocking
-		// this DOES NOT disable anti-cheat-detection, we're
-		// just making some adjustments so that we dont get kicked
-
-		Server.BaseEnter(iBase, iClientID);
-		if(iLocation)
-			Server.LocationEnter(iLocation, iClientID);
-		
-/*		// fix "Ship or Equipment not sold on base" kick
-		if(!bCargoFound)
-		{
-			// get last equipid
-			char *szLastEquipID = szClassPtr + 0x3C8;
-			ushort sEquipID;
-			memcpy(&sEquipID, szLastEquipID, 2);
-
-			// add to check-list which is being compared to the users equip-list when saving char
-			EquipDesc ed;
-			memset(&ed, 0, sizeof(ed));
-			ed.id = sEquipID;
-			ed.count = iCount;
-			ed.archid = iGoodID;
-			edlList->add_equipment_item(ed, true);
+		/* 
+		fix, else we get anti-cheat msg when undocking
+		this DOES NOT disable anti-cheat-detection, we're
+		just making some adjustments so that we dont get kicked 
+		*/
+		if (iBase) {
+			Server.BaseEnter(iBase, iClientID);
+			if (iLocation)
+				Server.LocationEnter(iLocation, iClientID);
 		}
-
-		// fix "Ship Related" kick, update crc
-		ulong lCRC;
-		__asm
-		{
-			mov ecx, [szClassPtr]
-			call [CRCAntiCheat]
-			mov [lCRC], eax
-		}
-		memcpy(szClassPtr + 0x320, &lCRC, 4);*/
 	}
 
 	return HKE_OK;
