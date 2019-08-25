@@ -645,8 +645,8 @@ void AdminCmd_AICome(CCmds* cmds)
 	return;
 }
 
-/* Make AI follow you until death */
-void AdminCmd_AIFollow(CCmds* cmds)
+/* Make AI follow a player until death */
+void AdminCmd_AIFollow(CCmds* cmds, wstring Charname)
 {
 	if (!(cmds->rights & RIGHT_SUPERADMIN))
 	{
@@ -654,22 +654,40 @@ void AdminCmd_AIFollow(CCmds* cmds)
 		return;
 	}
 
-	uint iShip1;
-	pub::Player::GetShip(HkGetClientIdFromCharname(cmds->GetAdminName()), iShip1);
-	if (iShip1)
-	{
-		foreach(npcs, uint, iShipIter)
+	// If no player specified follow the admin
+	uint iClientId;
+	if (Charname == L"") {
+		iClientId = HkGetClientIdFromCharname(cmds->GetAdminName());
+		Charname = cmds->GetAdminName();
+	}
+	// Follow the player specified
+	else {
+		iClientId = HkGetClientIdFromCharname(Charname);
+	}
+	if (iClientId == -1) {
+		cmds->Print(L"%s is not online\n", Charname.c_str());
+	}
+	else {
+		uint iShip1;
+		pub::Player::GetShip(iClientId, iShip1);
+		if (iShip1)
 		{
-			pub::AI::DirectiveCancelOp cancelOP;
-			pub::AI::SubmitDirective(*iShipIter, &cancelOP);
+			foreach(npcs, uint, iShipIter)
+			{
+				pub::AI::DirectiveCancelOp cancelOP;
+				pub::AI::SubmitDirective(*iShipIter, &cancelOP);
 
-			pub::AI::DirectiveFollowOp testOP;
-			testOP.leader = iShip1;
-			testOP.max_distance = 100;
-			pub::AI::SubmitDirective(*iShipIter, &testOP);
+				pub::AI::DirectiveFollowOp testOP;
+				testOP.leader = iShip1;
+				testOP.max_distance = 100;
+				pub::AI::SubmitDirective(*iShipIter, &testOP);
+			}
+			cmds->Print(L"Following %s\n", Charname.c_str());
+		}
+		else {
+			cmds->Print(L"%s is not in space\n", Charname.c_str());
 		}
 	}
-	cmds->Print(L"OK\n");
 	return;
 }
 
@@ -843,7 +861,7 @@ bool ExecuteCommandString_Callback(CCmds* cmds, const wstring &wscCmd)
 	else if (IS_CMD("aifollow"))
 	{
 		returncode = SKIPPLUGINS_NOFUNCTIONCALL;
-		AdminCmd_AIFollow(cmds);
+		AdminCmd_AIFollow(cmds, cmds->ArgStr(1));
 		return true;
 	}
 	else if (IS_CMD("aicome"))
