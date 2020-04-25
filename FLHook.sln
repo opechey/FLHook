@@ -73,6 +73,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "mark", "Plugins\Public\mark
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "bountyhunt", "Plugins\Public\bountyhunt\bountyhunt.vcxproj", "{8B166798-FDD5-4BCE-A54B-2D0EE634553C}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Solar Control", "Plugins\Public\solar_control\solar.vcxproj", "{F3A01C99-792F-4303-B1F9-D99633DD9D16}"
+EndProject
 Global
 	GlobalSection(SharedMSBuildProjectFiles) = preSolution
 		Plugins\PluginUtilities\PluginUtilities.vcxitems*{097bffbb-2bbe-4e16-b2fb-3ed8e90ecbd7}*SharedItemsImports = 4
@@ -97,6 +99,7 @@ Global
 		Plugins\PluginUtilities\PluginUtilities.vcxitems*{e7008ba7-4f75-4af7-b25c-3a9a3287a88f}*SharedItemsImports = 4
 		Plugins\PluginUtilities\PluginUtilities.vcxitems*{e7dfb061-5e6a-47dc-94c5-ccb169ea410a}*SharedItemsImports = 4
 		Plugins\PluginUtilities\PluginUtilities.vcxitems*{e7eb5672-90cc-4b88-a8a0-55bb6bbae7f7}*SharedItemsImports = 4
+		Plugins\PluginUtilities\PluginUtilities.vcxitems*{f3a01c99-792f-4303-b1f9-d99633dd9d16}*SharedItemsImports = 4
 	EndGlobalSection
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Win32 = Debug|Win32
@@ -349,6 +352,16 @@ Global
 		{8B166798-FDD5-4BCE-A54B-2D0EE634553C}.Release|Win32.ActiveCfg = Release|Win32
 		{8B166798-FDD5-4BCE-A54B-2D0EE634553C}.Release|Win32.Build.0 = Release|Win32
 		{8B166798-FDD5-4BCE-A54B-2D0EE634553C}.Release|x64.ActiveCfg = Release|Win32
+		{F3A01C99-792F-4303-B1F9-D99633DD9D16}.Debug|Win32.ActiveCfg = Debug|Win32
+		{F3A01C99-792F-4303-B1F9-D99633DD9D16}.Debug|Win32.Build.0 = Debug|Win32
+		{F3A01C99-792F-4303-B1F9-D99633DD9D16}.Debug|x64.ActiveCfg = Debug|Win32
+		{F3A01C99-792F-4303-B1F9-D99633DD9D16}.DebugDONOTUSE|Win32.ActiveCfg = Debug|Win32
+		{F3A01C99-792F-4303-B1F9-D99633DD9D16}.DebugDONOTUSE|Win32.Build.0 = Debug|Win32
+		{F3A01C99-792F-4303-B1F9-D99633DD9D16}.DebugDONOTUSE|x64.ActiveCfg = Release|Win32
+		{F3A01C99-792F-4303-B1F9-D99633DD9D16}.DebugDONOTUSE|x64.Build.0 = Release|Win32
+		{F3A01C99-792F-4303-B1F9-D99633DD9D16}.Release|Win32.ActiveCfg = Release|Win32
+		{F3A01C99-792F-4303-B1F9-D99633DD9D16}.Release|Win32.Build.0 = Release|Win32
+		{F3A01C99-792F-4303-B1F9-D99633DD9D16}.Release|x64.ActiveCfg = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -380,6 +393,7 @@ Global
 		{C26DA99F-10F7-421B-AC31-EED1623E7B04} = {F77D3998-A163-4D75-95E3-88C3C6B2DCFA}
 		{95031CE6-5AAF-410F-9075-FC6C98A4429E} = {F77D3998-A163-4D75-95E3-88C3C6B2DCFA}
 		{8B166798-FDD5-4BCE-A54B-2D0EE634553C} = {F77D3998-A163-4D75-95E3-88C3C6B2DCFA}
+		{F3A01C99-792F-4303-B1F9-D99633DD9D16} = {F77D3998-A163-4D75-95E3-88C3C6B2DCFA}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {393C1DF6-B2DC-4FF2-8100-36DD1F304E10}
